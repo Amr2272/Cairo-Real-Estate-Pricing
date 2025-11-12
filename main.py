@@ -115,17 +115,29 @@ num_features = ui_features.get('numeric_features', {})
 for key, f in num_features.items():
     if 'area' in key:
         inputs[key] = st.sidebar.number_input(
-        "Area (sqm)",
-        value=f.get('default', 0.0),
-        step=10.0)    
+            "Area (sqm)",
+            value=f.get('default', 0.0),
+            step=10.0)    
     elif key in ['bedrooms', 'bathrooms']:
-        inputs[key] = st.sidebar.slider(key.capitalize(), int(f['min']), int(f['max']), int(f['default']), 1)
+        inputs[key] = st.sidebar.slider(
+            key.capitalize(), 
+            int(f['min']), 
+            int(f['max']), 
+            int(f['default']), 
+            1)
     else:
-        inputs[key] = st.sidebar.number_input(key.replace('_', ' ').capitalize(), min_value=f['min'], max_value=f['max'], value=f['default'], step=1.0)
+        inputs[key] = st.sidebar.number_input(
+            key.replace('_', ' ').capitalize(), 
+            min_value=f['min'], 
+            max_value=f['max'], 
+            value=f['default'], 
+            step=1.0)
 
 for key in ui_features.keys():
-    if key not in num_features:
-        inputs[key] = st.sidebar.selectbox(key.replace('_', ' ').capitalize(), ui_features[key])
+    if key not in num_features and key != 'numeric_features':  
+        inputs[key] = st.sidebar.selectbox(
+            key.replace('_', ' ').capitalize(), 
+            ui_features[key])
 
 if st.sidebar.button("Predict Price", type="primary", use_container_width=True):
     try:
@@ -138,5 +150,6 @@ if st.sidebar.button("Predict Price", type="primary", use_container_width=True):
     except Exception as e:
         st.error(f"Prediction failed: {e}")
         st.dataframe(pd.DataFrame([inputs]))
+
 
 
