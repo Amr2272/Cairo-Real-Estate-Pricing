@@ -3,7 +3,7 @@ import pandas as pd
 import joblib
 import os
 import numpy as np
-from Utilties import SCALED_COLS, FINISHING_MAP, BINARY_MAP, LABEL_ENCODED_COLS
+from Utilities import SCALED_COLS, FINISHING_MAP, BINARY_MAP, LABEL_ENCODED_COLS
 
 MODEL_FILE = 'best_gbr_model.joblib'
 SCALER_FILE = 'scaler.joblib'
@@ -123,3 +123,4 @@ if model and scaler and lb_dict:
             
 else:
     st.warning("Model is not loaded. Please ensure all model files ('best_gbr_model.joblib', 'scaler.joblib', 'encoders.joblib') are present and compatible.")
+
