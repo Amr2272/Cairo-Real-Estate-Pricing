@@ -5,8 +5,7 @@ import json
 import os
 import time
 import numpy as np
-import plotly.express as px
-from Utilities import load_data 
+import plotly.express as px 
 
 from Model_Training import train_and_save_model
 from Model_Training import NUMERIC_FEATURES, CATEGORICAL_FEATURES 
@@ -55,7 +54,7 @@ def load_data_for_plots(filepath="cairo_real_estate_dataset.csv"):
     binary_cols = ['has_balcony', 'has_parking', 'has_security', 'has_amenities']
     for col in binary_cols:
         if col not in df.columns:
-            df[col] = 'No'
+            df[col] = 'No' 
     
     return df
 
@@ -94,6 +93,7 @@ def generate_plotly_plots(df):
                   barmode='group', title='Average Price By Top 5 Compounds and Finishing Type')
     fig3.update_layout(yaxis_title='Average Price (EGP)', xaxis_title='Compound Name')
 
+
     df_focus['service'] = (df_focus['has_security'].map({'Yes':1,"No":0}) +
                           df_focus['has_parking'].map({'Yes':1,"No":0}) +
                           df_focus['has_balcony'].map({'Yes':1,"No":0}) +
@@ -111,7 +111,6 @@ def generate_plotly_plots(df):
 
 @st.cache_resource
 def load_model_and_features():
-    """Loads the pre-trained model and UI features."""
     model = joblib.load(MODEL_PATH)
     with open(FEATURES_PATH, 'r') as f:
         ui_features = json.load(f)
@@ -141,18 +140,19 @@ if fig1 is not None:
 st.markdown("---")
 
 
+
 def run_prediction(inputs, model):
 
+    
+    
     model_features = set(NUMERIC_FEATURES) | set(CATEGORICAL_FEATURES)
     filtered_inputs = {k: [v] for k, v in inputs.items() if k in model_features}
     
     input_df = pd.DataFrame(filtered_inputs)
     
-
     if 'compound_count' in NUMERIC_FEATURES and 'compound_count' not in input_df.columns:
-        input_df['compound_count'] = 100 
+        input_df['compound_count'] = 100.0 
         
-
     training_cols = NUMERIC_FEATURES + CATEGORICAL_FEATURES
     
     for col in training_cols:
@@ -170,20 +170,28 @@ st.title("🏠 Cairo Real Estate Price Predictor")
 
 num_features = ui_features.pop('numeric_features')
 cat_features = ui_features 
-
 st.sidebar.header("Property Details")
 inputs = {}
 
 for col in ['area_sqm', 'bedrooms', 'bathrooms', 'floor_number']:
     if col in num_features:
-        min_val = num_features[col]['min']
-        max_val = num_features[col]['max']
-        default_val = max(1, int(np.median([min_val, max_val])))
+        min_val = float(num_features[col]['min'])
+        max_val = float(num_features[col]['max'])
+        median_val = np.median([min_val, max_val])
+
+        if col in ['bedrooms', 'bathrooms', 'floor_number']:
+            default_val = float(max(1, int(median_val)))
+            step_val = 1.0
+        else:
+            default_val = float(median_val)
+            step_val = 1.0 
+
         inputs[col] = st.sidebar.slider(
             col.replace('_', ' ').title(),
             min_value=min_val,
             max_value=max_val,
-            value=default_val
+            value=default_val,
+            step=step_val
         )
 
 st.header("Location & Age")
@@ -191,20 +199,27 @@ col1, col2, col3 = st.columns(3)
 with col1:
     col = 'building_age_years'
     if col in num_features:
-        min_val = num_features[col]['min']
-        max_val = num_features[col]['max']
-        inputs[col] = st.slider("Building Age (Years)", min_val, max_val, max(0, int(np.median([min_val, max_val]))))
+        min_val = float(num_features[col]['min'])
+        max_val = float(num_features[col]['max'])
+        default_val = float(max(0, int(np.median([min_val, max_val]))))
+        inputs[col] = st.slider("Building Age (Years)", min_val, max_val, default_val, step=1.0)
 with col2:
     col = 'distance_to_auc_km'
     if col in num_features:
-        inputs[col] = st.number_input("Distance to AUC (km)", float(num_features[col]['min']), float(num_features[col]['max']), value=1.0, step=0.1)
+        min_val = float(num_features[col]['min'])
+        max_val = float(num_features[col]['max'])
+        inputs[col] = st.number_input("Distance to AUC (km)", min_val, max_val, value=1.0, step=0.1)
 with col3:
     col = 'distance_to_mall_km'
     if col in num_features:
-        inputs[col] = st.number_input("Distance to Mall (km)", float(num_features[col]['min']), float(num_features[col]['max']), value=5.0, step=0.1)
+        min_val = float(num_features[col]['min'])
+        max_val = float(num_features[col]['max'])
+        inputs[col] = st.number_input("Distance to Mall (km)", min_val, max_val, value=5.0, step=0.1)
     col = 'distance_to_metro_km'
     if col in num_features:
-        inputs[col] = st.number_input("Distance to Metro (km)", float(num_features[col]['min']), float(num_features[col]['max']), value=10.0, step=0.1)
+        min_val = float(num_features[col]['min'])
+        max_val = float(num_features[col]['max'])
+        inputs[col] = st.number_input("Distance to Metro (km)", min_val, max_val, value=10.0, step=0.1)
 
 
 st.header("Property Classification")
@@ -212,6 +227,7 @@ col1, col2, col3 = st.columns(3)
 
 if 'compound_name' in cat_features:
     inputs['compound_name'] = col1.selectbox("Compound Name", ['Not Specified'] + cat_features['compound_name'])
+
 
 if 'district' in cat_features:
     inputs['district'] = col2.selectbox("District", cat_features['district'])
@@ -232,7 +248,7 @@ has_security = col3.checkbox("Security", value=True)
 has_amenities = col4.checkbox("Amenities", value=False)
 
 
-inputs['services'] = int(has_balcony) + int(has_parking) + int(has_security) + int(has_amenities)
+inputs['services'] = float(int(has_balcony) + int(has_parking) + int(has_security) + int(has_amenities))
 
 
 if st.sidebar.button("Predict Price", type="primary", use_container_width=True):
