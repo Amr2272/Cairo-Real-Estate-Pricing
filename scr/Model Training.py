@@ -1,45 +1,59 @@
 import pandas as pd
-from sklearn.linear_model import LinearRegression
-from sklearn.metrics import r2_score, mean_absolute_error
 import joblib
-import warnings
-from Utilities import load_data, preprocess_for_training, get_feature_order
+from sklearn.ensemble import GradientBoostingRegressor
+from sklearn.model_selection import GridSearchCV
+from Utilities import preprocess_and_split, evaluate_model
 
-warnings.filterwarnings('ignore')
+DATA_FILE = 'cairo_real_estate_dataset.csv'
+MODEL_FILE = 'best_gbr_model.joblib'
+SCALER_FILE = 'scaler.joblib'
+ENCODERS_FILE = 'encoders.joblib'
 
-def train_and_save_model():
+def train_best_model():
 
+    print(f"Loading data from {DATA_FILE}...")
+    try:
+        df = pd.read_csv(DATA_FILE)
+    except FileNotFoundError:
+        print(f"Error: {DATA_FILE} not found. Please ensure it's in the same directory.")
+        return
 
-    print("Loading data...")
-    df = load_data('cairo_real_estate_dataset.csv')
+    x_train, x_test, y_train, y_test, scaler, lb_dict = preprocess_and_split(df)
     
-    print("Preprocessing data for training...")
+    joblib.dump(scaler, SCALER_FILE)
+    joblib.dump(lb_dict, ENCODERS_FILE)
+    print(f"Scaler saved to {SCALER_FILE}")
+    print(f"LabelEncoders saved to {ENCODERS_FILE}")
 
-    compound_count_map = df.groupby('compound_name')['listing_id'].count().to_dict()
-    
-    x_train, x_test, y_train, y_test, scaler, encoders, _ = preprocess_for_training(df.copy())
-    
-    feature_cols = get_feature_order(df.copy())
+    param_grid = {
+        'n_estimators': [100, 200, 300],
+        'max_depth': [10, 15, 20],
+        'learning_rate': [0.01, 0.05, 0.1]
+    }
 
-    print("Training Linear Regression model...")
-    model = LinearRegression()
-    model.fit(x_train, y_train)
+    grid_search = GridSearchCV(
+        GradientBoostingRegressor(random_state=42),
+        param_grid,
+        cv=5,
+        scoring='neg_mean_absolute_error',
+        verbose=1,
+        n_jobs=-1
+    )
 
-    print("Evaluating model...")
-    pred = model.predict(x_test)
-    r2 = r2_score(y_test, pred)
-    mae = mean_absolute_error(y_test, pred)
-    
-    print(f"Model Performance - R2 Score: {r2:.4f}, MAE: {mae:,.0f}")
+    print("\nStarting Grid Search for GradientBoostingRegressor...")
+    grid_search.fit(x_train, y_train)
+    best_model = grid_search.best_estimator_
 
-    print("Saving artifacts...")
-    joblib.dump(model, 'real_estate_model.joblib')
-    joblib.dump(scaler, 'scaler.joblib')
-    joblib.dump(encoders, 'label_encoders.joblib')
-    joblib.dump(compound_count_map, 'compound_map.joblib')
-    joblib.dump(feature_cols, 'feature_columns.joblib')
-    
-    print("Model, scaler, encoders, compound map, and feature columns saved successfully.")
+    joblib.dump(best_model, MODEL_FILE)
+
+    r2, mae = evaluate_model(best_model, x_test, y_test)
+    print(f"\n--- Training Complete ---")
+    print(f"Best Parameters: {grid_search.best_params_}")
+    print(f"Cross-Validation MAE: {(-grid_search.best_score_):,.0f} EGP")
+    print(f"Test R2 Score: {r2:.4f}")
+    print(f"Test MAE: {mae:,.0f} EGP")
+    print(f"Model saved to {MODEL_FILE}")
+
 
 if __name__ == "__main__":
-    train_and_save_model()
+    train_best_model()
