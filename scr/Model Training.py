@@ -9,10 +9,12 @@ warnings.filterwarnings('ignore')
 
 def train_and_save_model():
 
+
     print("Loading data...")
     df = load_data('cairo_real_estate_dataset.csv')
     
     print("Preprocessing data for training...")
+
     compound_count_map = df.groupby('compound_name')['listing_id'].count().to_dict()
     
     x_train, x_test, y_train, y_test, scaler, encoders, _ = preprocess_for_training(df.copy())
