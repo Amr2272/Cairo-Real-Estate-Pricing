@@ -132,12 +132,11 @@ if st.sidebar.button("Predict Price", type="primary", use_container_width=True):
         all_cols = NUMERIC_FEATURES + CATEGORICAL_FEATURES
         input_df = pd.DataFrame([{k: inputs[k] for k in all_cols if k in inputs}])
         pred = model.predict(input_df)[0]
+        st.header('Model Prediction Price')
         st.success(f"🏡 **Estimated Price: {pred:,.0f} EGP**")
         st.balloons()
     except Exception as e:
         st.error(f"Prediction failed: {e}")
         st.dataframe(pd.DataFrame([inputs]))
 
-st.markdown("---")
-st.header("📊 Market Insights")
 
