@@ -29,6 +29,7 @@ def get_column_lists():
 
 def preprocess_for_training(df):
 
+
     compound_count_map = df.groupby('compound_name')['listing_id'].count().to_dict()
     df['compound_count'] = df.groupby('compound_name')['listing_id'].transform('count')
     
@@ -41,7 +42,7 @@ def preprocess_for_training(df):
     df.set_index('listing_id', inplace=True)
     if 'listing_date' in df.columns:
         df.drop('listing_date', axis=1, inplace=True)
-
+    
     df['finishing_type'] = df['finishing_type'].map({'Unfinished': 0, 'Semi-finished': 1, 'Lux': 2, 'Super Lux': 3})
 
     l_cols, ht_cols, n_cols, _, _ = get_column_lists()
@@ -49,6 +50,7 @@ def preprocess_for_training(df):
     label_encoders = {}
     for col in l_cols + ht_cols:
         le = LabelEncoder()
+        df[col] = df[col].astype(str)
         df[col] = le.fit_transform(df[col])
         label_encoders[col] = le
         
@@ -87,6 +89,7 @@ def get_feature_order(df):
 
     for col in l_cols + ht_cols:
         le = LabelEncoder()
+        df[col] = df[col].astype(str) 
         df[col] = le.fit_transform(df[col])
         
     X = df.drop('price_egp', axis=1)
