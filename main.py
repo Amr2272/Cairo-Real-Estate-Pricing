@@ -27,6 +27,7 @@ def load_or_train_model():
             st.error(f"Error loading model or features: {e}")
             st.stop()
     else:
+        st.title("🏠 Welcome to the Real Estate Predictor")
         st.warning("Model or features not found. Training a new one — this happens once.")
         with st.spinner("Training model... please wait"):
             try:
@@ -49,7 +50,7 @@ def load_data_for_plots(filepath=DATA_FILEPATH):
     try:
         df = pd.read_csv(filepath)
     except FileNotFoundError:
-        st.error(f"Data file '{filepath}' not found.")
+        st.error(f"Error: The data file {filepath} was not found. Cannot generate plots.")
         return None
     df['compound_name'] = df['compound_name'].fillna('Not Specified')
     df['finishing_type'] = df['finishing_type'].fillna('Unfinished')
@@ -60,56 +61,147 @@ def load_data_for_plots(filepath=DATA_FILEPATH):
             df[col] = 'No'
     return df
 
-st.title("🏠 Cairo Real Estate Price Predictor")
-st.markdown("Use the sidebar to enter property details and predict the market price.")
+def generate_plotly_plots(df):
+    if df is None:
+        return None, None, None, None
+    top_5_compounds = df['compound_name'].value_counts().nlargest(5).index
+    compound_counts = df['compound_name'].value_counts().reset_index(name='compound_count').head(10)
+    compound_counts.columns = ['compound_name', 'compound_count']
+    fig1 = px.bar(compound_counts, x='compound_count', y='compound_name', title='Top 10 Compounds by Number of Listings', color='compound_count', color_continuous_scale='viridis', hover_data={'compound_count': True, 'compound_name': False})
+    fig1.update_layout(yaxis={'categoryorder': 'total ascending'}, showlegend=False)
+    fig1.update_yaxes(title_text='Compound Name')
+    fig1.update_xaxes(title_text='Number of Listings')
+    avg_price = df.groupby('district')['price_egp'].mean().reset_index(name='Average Price (EGP)')
+    avg_price = avg_price.sort_values(by='Average Price (EGP)', ascending=False)
+    avg_price['Text Label'] = (avg_price['Average Price (EGP)'] / 1e6).round(2).astype(str) + 'M'
+    fig2 = px.bar(avg_price, x='district', y='Average Price (EGP)', title='Average Price by District', color='Average Price (EGP)', color_continuous_scale='plasma', text='Text Label')
+    fig2.update_traces(textposition='outside')
+    fig2.update_layout(uniformtext_minsize=8, uniformtext_mode='hide', xaxis={'categoryorder': 'total descending'}, showlegend=False)
+    fig2.update_yaxes(title_text='Average Price (EGP)')
+    fig2.update_xaxes(title_text='District')
+    df_focus = df[df['compound_name'].isin(top_5_compounds)].copy()
+    vs_finish = df_focus.groupby(['compound_name', 'finishing_type'], as_index=False)['price_egp'].mean()
+    fig3 = px.bar(vs_finish, x='compound_name', y='price_egp', color='finishing_type', barmode='group', title='Average Price By Top 5 Compounds and Finishing Type')
+    fig3.update_layout(yaxis_title='Average Price (EGP)', xaxis_title='Compound Name')
+    df_focus['service'] = (df_focus['has_security'].map({'Yes': 1, "No": 0}) + df_focus['has_parking'].map({'Yes': 1, "No": 0}) + df_focus['has_balcony'].map({'Yes': 1, "No": 0}) + df_focus['has_amenities'].map({'Yes': 1, "No": 0}))
+    df_focus['service'] = df_focus['service'].astype(str)
+    vs_service = df_focus.groupby(['compound_name', 'service'], as_index=False)['price_egp'].mean()
+    fig4 = px.bar(vs_service, x='compound_name', y='price_egp', color='service', barmode='group', title='Average Price By Top 5 Compounds and Service Count')
+    fig4.update_layout(yaxis_title='Average Price (EGP)', xaxis_title='Compound Name')
+    fig4.update_xaxes(tickangle=45)
+    return fig1, fig2, fig3, fig4
 
-if model is None or ui_features is None:
-    st.error("Model or UI features could not be loaded. Please refresh later.")
-    st.stop()
+st.header("Exploratory Data Analysis (EDA) Insights")
 
-st.sidebar.header("Enter Property Features")
-inputs = {}
-num_features = ui_features.get('numeric_features', {})
+df_plots = load_data_for_plots(DATA_FILEPATH)
+fig1, fig2, fig3, fig4 = generate_plotly_plots(df_plots)
 
-for key, f in num_features.items():
-    if 'area' in key:
-        inputs[key] = st.sidebar.number_input(f"Area (sqm)", min_value=f['min'], max_value=f['max'], value=f['default'], step=10.0)
-    elif key in ['bedrooms', 'bathrooms']:
-        inputs[key] = st.sidebar.slider(key.capitalize(), int(f['min']), int(f['max']), int(f['default']), 1)
-    else:
-        inputs[key] = st.sidebar.number_input(key.replace('_', ' ').capitalize(), min_value=f['min'], max_value=f['max'], value=f['default'], step=1.0)
-
-for key in ui_features.keys():
-    if key not in num_features:
-        inputs[key] = st.sidebar.selectbox(key.replace('_', ' ').capitalize(), ui_features[key])
-
-if st.sidebar.button("Predict Price", type="primary", use_container_width=True):
-    try:
-        all_cols = NUMERIC_FEATURES + CATEGORICAL_FEATURES
-        input_df = pd.DataFrame([{k: inputs[k] for k in all_cols if k in inputs}])
-        pred = model.predict(input_df)[0]
-        st.success(f"🏡 **Estimated Price: {pred:,.0f} EGP**")
-        st.balloons()
-    except Exception as e:
-        st.error(f"Prediction failed: {e}")
-        st.dataframe(pd.DataFrame([inputs]))
+if fig1 is not None:
+    st.subheader("1. Top 10 Compounds by Number of Listings")
+    st.plotly_chart(fig1, use_container_width=True)
+    st.subheader("2. Average Price by District")
+    st.plotly_chart(fig2, use_container_width=True)
+    st.subheader("3. Average Price By Top 5 Compounds and Finishing Type")
+    st.plotly_chart(fig3, use_container_width=True)
+    st.subheader("4. Average Price By Top 5 Compounds and Service Count")
+    st.plotly_chart(fig4, use_container_width=True)
 
 st.markdown("---")
-st.header("📊 Market Insights")
 
-df = load_data_for_plots()
-if df is not None:
-    with st.spinner("Generating charts..."):
-        top_compounds = df['compound_name'].value_counts().nlargest(5).index
-        fig1 = px.bar(
-            df['compound_name'].value_counts().head(10).reset_index(),
-            x='count', y='compound_name',
-            title="Top 10 Compounds by Listings", color='count', color_continuous_scale='viridis'
-        )
-        fig1.update_layout(yaxis={'categoryorder': 'total ascending'}, showlegend=False)
-        st.plotly_chart(fig1, use_container_width=True)
-        avg_price = df.groupby('district')['price_egp'].mean().reset_index().sort_values('price_egp', ascending=False)
-        fig2 = px.bar(avg_price, x='district', y='price_egp', title="Average Price by District", color='price_egp', color_continuous_scale='plasma')
-        st.plotly_chart(fig2, use_container_width=True)
-else:
-    st.info("Data unavailable — upload 'cairo_real_estate_dataset.csv' to enable insights.")
+def run_prediction(inputs, model):
+    model_features = set(NUMERIC_FEATURES) | set(CATEGORICAL_FEATURES)
+    filtered_inputs = {k: [v] for k, v in inputs.items() if k in model_features}
+    input_df = pd.DataFrame(filtered_inputs)
+    if 'compound_count' in NUMERIC_FEATURES and 'compound_count' not in input_df.columns:
+        input_df['compound_count'] = 100.0
+    training_cols = NUMERIC_FEATURES + CATEGORICAL_FEATURES
+    for col in training_cols:
+        if col not in input_df.columns:
+            input_df[col] = np.nan
+    input_df = input_df[training_cols]
+    prediction_array = model.predict(input_df)
+    return np.exp(prediction_array[0])
+
+st.title("🏠 Cairo Real Estate Price Predictor")
+
+num_features = ui_features.pop('numeric_features', {})
+cat_features = ui_features
+
+st.sidebar.header("Property Details")
+inputs = {}
+
+for col in ['area_sqm', 'bedrooms', 'bathrooms', 'floor_number']:
+    if col in num_features:
+        min_val = float(num_features[col]['min'])
+        max_val = float(num_features[col]['max'])
+        median_val = np.median([min_val, max_val])
+        if col in ['bedrooms', 'bathrooms', 'floor_number']:
+            default_val = float(max(1, int(median_val)))
+            step_val = 1.0
+        else:
+            default_val = float(median_val)
+            step_val = 1.0
+        inputs[col] = st.sidebar.slider(col.replace('_', ' ').title(), min_value=min_val, max_value=max_val, value=default_val, step=step_val)
+
+st.header("Location & Age")
+col1, col2, col3 = st.columns(3)
+with col1:
+    col = 'building_age_years'
+    if col in num_features:
+        min_val = float(num_features[col]['min'])
+        max_val = float(num_features[col]['max'])
+        default_val = float(max(0, int(np.median([min_val, max_val]))))
+        inputs[col] = st.slider("Building Age (Years)", min_val, max_val, default_val, step=1.0)
+with col2:
+    col = 'distance_to_auc_km'
+    if col in num_features:
+        min_val = float(num_features[col]['min'])
+        max_val = float(num_features[col]['max'])
+        inputs[col] = st.number_input("Distance to AUC (km)", min_val, max_val, value=1.0, step=0.1)
+with col3:
+    col = 'distance_to_mall_km'
+    if col in num_features:
+        min_val = float(num_features[col]['min'])
+        max_val = float(num_features[col]['max'])
+        inputs[col] = st.number_input("Distance to Mall (km)", min_val, max_val, value=5.0, step=0.1)
+    col = 'distance_to_metro_km'
+    if col in num_features:
+        min_val = float(num_features[col]['min'])
+        max_val = float(num_features[col]['max'])
+        inputs[col] = st.number_input("Distance to Metro (km)", min_val, max_val, value=10.0, step=0.1)
+
+st.header("Property Classification")
+col1, col2, col3 = st.columns(3)
+if 'compound_name' in cat_features:
+    inputs['compound_name'] = col1.selectbox("Compound Name", ['Not Specified'] + cat_features['compound_name'])
+if 'district' in cat_features:
+    inputs['district'] = col2.selectbox("District", cat_features['district'])
+if 'finishing_type' in cat_features:
+    inputs['finishing_type'] = col3.selectbox("Finishing Type", cat_features['finishing_type'])
+if 'view_type' in cat_features:
+    inputs['view_type'] = col1.selectbox("View Type", cat_features['view_type'])
+
+st.header("Services & Amenities (New EDA Feature)")
+st.info("The combined count of these services is used as a new feature: `services`.")
+col1, col2, col3, col4 = st.columns(4)
+has_balcony = col1.checkbox("Balcony", value=True)
+has_parking = col2.checkbox("Parking", value=True)
+has_security = col3.checkbox("Security", value=True)
+has_amenities = col4.checkbox("Amenities", value=False)
+inputs['services'] = float(int(has_balcony) + int(has_parking) + int(has_security) + int(has_amenities))
+
+if st.sidebar.button("Predict Price", type="primary", use_container_width=True):
+    missing_cols = [col for col in (NUMERIC_FEATURES + CATEGORICAL_FEATURES) if col not in inputs and col not in ['compound_count', 'services']]
+    if missing_cols:
+        st.error(f"Error: Missing required inputs: {', '.join(missing_cols)}")
+        st.stop()
+    try:
+        with st.spinner("Calculating price..."):
+            predicted_price = run_prediction(inputs, model)
+            st.markdown("---")
+            st.subheader("Predicted Property Price")
+            st.metric(label="Estimated Price (EGP)", value=f"{predicted_price:,.0f}")
+            st.success("Prediction complete!")
+    except Exception as e:
+        st.error(f"An error occurred during prediction: {e}")
+        st.warning("Please ensure all inputs are valid and the model is correctly trained.")
