@@ -201,7 +201,9 @@ def run_prediction(inputs, model):
 st.title("🏠 Cairo Real Estate Price Predictor")
 
 # Separating feature sets
-num_features = ui_features.pop('numeric_features')
+# FIX: Use .pop('numeric_features', {}) to safely retrieve the numeric features or default to an empty dict
+# if the key is missing from the loaded JSON, which prevents the KeyError.
+num_features = ui_features.pop('numeric_features', {})
 cat_features = ui_features # Remaining keys are categorical features
 
 st.sidebar.header("Property Details")
