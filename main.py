@@ -27,7 +27,6 @@ def load_or_train_model():
             st.error(f"Error loading model or features: {e}")
             st.stop()
     else:
-        st.title("🏠 Welcome to the Real Estate Predictor")
         st.warning("Model or features not found. Training a new one — this happens once.")
         with st.spinner("Training model... please wait"):
             try:
@@ -108,100 +107,37 @@ if fig1 is not None:
 
 st.markdown("---")
 
-def run_prediction(inputs, model):
-    model_features = set(NUMERIC_FEATURES) | set(CATEGORICAL_FEATURES)
-    filtered_inputs = {k: [v] for k, v in inputs.items() if k in model_features}
-    input_df = pd.DataFrame(filtered_inputs)
-    if 'compound_count' in NUMERIC_FEATURES and 'compound_count' not in input_df.columns:
-        input_df['compound_count'] = 100.0
-    training_cols = NUMERIC_FEATURES + CATEGORICAL_FEATURES
-    for col in training_cols:
-        if col not in input_df.columns:
-            input_df[col] = np.nan
-    input_df = input_df[training_cols]
-    prediction_array = model.predict(input_df)
-    return np.exp(prediction_array[0])
 
-st.title("🏠 Cairo Real Estate Price Predictor")
-
-num_features = ui_features.pop('numeric_features', {})
-cat_features = ui_features
-
-st.sidebar.header("Property Details")
+st.sidebar.header("Enter Property Features")
 inputs = {}
+num_features = ui_features.get('numeric_features', {})
 
-for col in ['area_sqm', 'bedrooms', 'bathrooms', 'floor_number']:
-    if col in num_features:
-        min_val = float(num_features[col]['min'])
-        max_val = float(num_features[col]['max'])
-        median_val = np.median([min_val, max_val])
-        if col in ['bedrooms', 'bathrooms', 'floor_number']:
-            default_val = float(max(1, int(median_val)))
-            step_val = 1.0
-        else:
-            default_val = float(median_val)
-            step_val = 1.0
-        inputs[col] = st.sidebar.slider(col.replace('_', ' ').title(), min_value=min_val, max_value=max_val, value=default_val, step=step_val)
+for key, f in num_features.items():
+    if 'area' in key:
+        inputs[key] = st.sidebar.number_input(
+        "Area (sqm)",
+        value=f.get('default', 0.0),
+        step=10.0)    
+    elif key in ['bedrooms', 'bathrooms']:
+        inputs[key] = st.sidebar.slider(key.capitalize(), int(f['min']), int(f['max']), int(f['default']), 1)
+    else:
+        inputs[key] = st.sidebar.number_input(key.replace('_', ' ').capitalize(), min_value=f['min'], max_value=f['max'], value=f['default'], step=1.0)
 
-st.header("Location & Age")
-col1, col2, col3 = st.columns(3)
-with col1:
-    col = 'building_age_years'
-    if col in num_features:
-        min_val = float(num_features[col]['min'])
-        max_val = float(num_features[col]['max'])
-        default_val = float(max(0, int(np.median([min_val, max_val]))))
-        inputs[col] = st.slider("Building Age (Years)", min_val, max_val, default_val, step=1.0)
-with col2:
-    col = 'distance_to_auc_km'
-    if col in num_features:
-        min_val = float(num_features[col]['min'])
-        max_val = float(num_features[col]['max'])
-        inputs[col] = st.number_input("Distance to AUC (km)", min_val, max_val, value=1.0, step=0.1)
-with col3:
-    col = 'distance_to_mall_km'
-    if col in num_features:
-        min_val = float(num_features[col]['min'])
-        max_val = float(num_features[col]['max'])
-        inputs[col] = st.number_input("Distance to Mall (km)", min_val, max_val, value=5.0, step=0.1)
-    col = 'distance_to_metro_km'
-    if col in num_features:
-        min_val = float(num_features[col]['min'])
-        max_val = float(num_features[col]['max'])
-        inputs[col] = st.number_input("Distance to Metro (km)", min_val, max_val, value=10.0, step=0.1)
-
-st.header("Property Classification")
-col1, col2, col3 = st.columns(3)
-if 'compound_name' in cat_features:
-    inputs['compound_name'] = col1.selectbox("Compound Name", ['Not Specified'] + cat_features['compound_name'])
-if 'district' in cat_features:
-    inputs['district'] = col2.selectbox("District", cat_features['district'])
-if 'finishing_type' in cat_features:
-    inputs['finishing_type'] = col3.selectbox("Finishing Type", cat_features['finishing_type'])
-if 'view_type' in cat_features:
-    inputs['view_type'] = col1.selectbox("View Type", cat_features['view_type'])
-
-st.header("Services & Amenities (New EDA Feature)")
-st.info("The combined count of these services is used as a new feature: `services`.")
-col1, col2, col3, col4 = st.columns(4)
-has_balcony = col1.checkbox("Balcony", value=True)
-has_parking = col2.checkbox("Parking", value=True)
-has_security = col3.checkbox("Security", value=True)
-has_amenities = col4.checkbox("Amenities", value=False)
-inputs['services'] = float(int(has_balcony) + int(has_parking) + int(has_security) + int(has_amenities))
+for key in ui_features.keys():
+    if key not in num_features:
+        inputs[key] = st.sidebar.selectbox(key.replace('_', ' ').capitalize(), ui_features[key])
 
 if st.sidebar.button("Predict Price", type="primary", use_container_width=True):
-    missing_cols = [col for col in (NUMERIC_FEATURES + CATEGORICAL_FEATURES) if col not in inputs and col not in ['compound_count', 'services']]
-    if missing_cols:
-        st.error(f"Error: Missing required inputs: {', '.join(missing_cols)}")
-        st.stop()
     try:
-        with st.spinner("Calculating price..."):
-            predicted_price = run_prediction(inputs, model)
-            st.markdown("---")
-            st.subheader("Predicted Property Price")
-            st.metric(label="Estimated Price (EGP)", value=f"{predicted_price:,.0f}")
-            st.success("Prediction complete!")
+        all_cols = NUMERIC_FEATURES + CATEGORICAL_FEATURES
+        input_df = pd.DataFrame([{k: inputs[k] for k in all_cols if k in inputs}])
+        pred = model.predict(input_df)[0]
+        st.success(f"🏡 **Estimated Price: {pred:,.0f} EGP**")
+        st.balloons()
     except Exception as e:
-        st.error(f"An error occurred during prediction: {e}")
-        st.warning("Please ensure all inputs are valid and the model is correctly trained.")
+        st.error(f"Prediction failed: {e}")
+        st.dataframe(pd.DataFrame([inputs]))
+
+st.markdown("---")
+st.header("📊 Market Insights")
+
