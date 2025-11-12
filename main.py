@@ -6,7 +6,7 @@ import os
 import time
 
 
-from Model_Training import train_and_save_model
+from Model_Training import train_and_save_model, NUMERIC_FEATURES, CATEGORICAL_FEATURES
 
 st.set_page_config(
     page_title="Cairo Real Estate Predictor",
@@ -222,5 +222,6 @@ else:
         except Exception as e:
             st.error(f"An error occurred during prediction: {e}")
             st.dataframe(input_df)
+
 
 
