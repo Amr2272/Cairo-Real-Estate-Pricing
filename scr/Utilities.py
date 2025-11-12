@@ -1,67 +1,41 @@
 import pandas as pd
-from sklearn.preprocessing import LabelEncoder, StandardScaler
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import r2_score, mean_absolute_error
-from sklearn.ensemble import GradientBoostingRegressor
+from sklearn.preprocessing import StandardScaler, OneHotEncoder
+from sklearn.compose import ColumnTransformer
+from sklearn.pipeline import Pipeline
 
+def load_data(filepath="cairo_real_estate_dataset.csv"):
 
-FINISHING_MAP = {'Unfinished': 0, 'Semi-finished': 1, 'Lux': 2 , 'Super Lux': 3}
+    try:
+        df = pd.read_csv(filepath)
+    except FileNotFoundError:
+        print(f"Error: The file {filepath} was not found.")
+        return None
 
-SCALED_COLS = ['area_sqm', 'floor_number', 'building_age_years', 'distance_to_auc_km',
-               'distance_to_mall_km', 'distance_to_metro_km', 'days_on_market']
+    df['compound_name'] = df['compound_name'].fillna('Not Specified')
+    df['finishing_type'] = df['finishing_type'].fillna('Unfinished')
 
-BINARY_MAP_YN = {'Yes': 1, "No": 0} 
+    columns_to_drop = ['listing_id', 'listing_date', 'days_on_market', 'seller_type', 'is_negotiable']
+    df = df.drop(columns=[col for col in columns_to_drop if col in df.columns])
 
-def load_and_preprocess_data(file_path):
+    df = df.dropna()
 
-    df = pd.read_csv(file_path)
-    df = df.copy()
+    return df
 
-    df['compound_name'] = df['compound_name'].fillna(df['compound_name'].mode()[0])
-    df.set_index('listing_id', inplace=True)
-    df.drop('listing_date', axis=1, inplace=True)
+def get_preprocessor(categorical_features, numeric_features):
 
-    df['finishing_type'] = df['finishing_type'].map(FINISHING_MAP)
     
-    df['services'] = (df['has_security'].map(BINARY_MAP_YN) + 
-                      df['has_parking'].map(BINARY_MAP_YN) +
-                      df['has_balcony'].map(BINARY_MAP_YN) + 
-                      df['has_amenities'].map(BINARY_MAP_YN))
+    numeric_transformer = Pipeline(steps=[
+        ('scaler', StandardScaler())
+    ])
+
+    categorical_transformer = Pipeline(steps=[
+        ('onehot', OneHotEncoder(handle_unknown='ignore'))
+    ])
+
+    preprocessor = ColumnTransformer(
+        transformers=[
+            ('num', numeric_transformer, numeric_features),
+            ('cat', categorical_transformer, categorical_features)
+        ])
     
-    lb_dict = {}
-    
-    lb_cols = ['has_balcony', 'has_parking', 'has_security', 'has_amenities','seller_type','is_negotiable',
-               'district', 'compound_name','view_type']
-    
-    for col in lb_cols:
-        lb = LabelEncoder()
-        df[col] = lb.fit_transform(df[col])
-        lb_dict[col] = lb
-    
-    return df.drop_duplicates(), lb_dict
-
-def train_model(file_path):
-
-    df, lb_dict = load_and_preprocess_data(file_path)
-
-    X = df.drop('price_egp', axis=1)
-    Y = df['price_egp']
-
-    y_binned = pd.qcut(Y, q=5, labels=False, duplicates='drop')
-    x_train, _, y_train, _ = train_test_split(
-        X, Y, test_size=0.1, random_state=42, stratify=y_binned
-    )
-
-    scaler = StandardScaler()
-    x_train[SCALED_COLS] = scaler.fit_transform(x_train[SCALED_COLS])
-    
-    best_model = GradientBoostingRegressor(
-        n_estimators=300, 
-        max_depth=10, 
-        learning_rate=0.05, 
-        random_state=42
-    )
-
-    best_model.fit(x_train, y_train)
-
-    return best_model, scaler, lb_dict
+    return preprocessor
